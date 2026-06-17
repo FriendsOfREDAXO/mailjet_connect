@@ -1,0 +1,32 @@
+package: mailjet_connect
+version: 1.0.0
+author: Friends Of REDAXO
+supportpage: https://github.com/FriendsOfREDAXO/mailjet_connect
+
+page:
+    title: 'translate:mailjet_connect_title'
+    icon: rex-icon fa-paper-plane
+    perm: mailjet_connect[]
+    subpages:
+        settings:
+            title: 'translate:mailjet_connect_settings'
+            icon: rex-icon fa-cog
+            isDefault: true
+        yform_sync:
+            title: 'translate:mailjet_connect_yform_sync'
+            icon: rex-icon fa-exchange
+        events:
+            title: 'translate:mailjet_connect_events'
+            icon: rex-icon fa-list
+        diagnostics:
+            title: 'translate:mailjet_connect_diagnostics'
+            icon: rex-icon fa-stethoscope
+        help:
+            title: 'translate:mailjet_connect_help'
+            icon: rex-icon fa-question-circle
+            subPath: README.md
+            itemClass: 'pull-right'
+
+requires:
+    php: '>=8.2'
+    redaxo: '^5.17.0'
