@@ -61,7 +61,7 @@ if (rex_addon::get('yform')->isAvailable() && class_exists('rex_yform_manager_ta
     echo rex_view::warning($addon->i18n('mailjet_connect_yform_sync_yform_missing'));
 }
 
-$selectedTable = trim((string) $addon->getConfig('yform_sync_table', ''));
+$selectedTable = trim((string) rex_post('yform_sync_table', 'string', (string) $addon->getConfig('yform_sync_table', '')));
 $yformColumns = [];
 if ('' !== $selectedTable && rex_addon::get('yform')->isAvailable() && class_exists('rex_yform_manager_table')) {
     $table = rex_yform_manager_table::get($selectedTable);
@@ -133,16 +133,16 @@ $content .= '</div>';
 $content .= '<div class="form-group">';
 $content .= '<label for="yform_sync_table">' . rex_escape($addon->i18n('mailjet_connect_yform_sync_table')) . '</label>';
 
-$content .= '<select class="form-control" id="yform_sync_table" name="yform_sync_table">';
+$content .= '<select class="form-control" id="yform_sync_table" name="yform_sync_table" onchange="this.form.submit()">';
 $content .= '<option value="">— Tabelle wählen —</option>';
 
 foreach ($yformTableOptions as $option) {
-    $selected = $option['value'] === (string) $addon->getConfig('yform_sync_table', '') ? ' selected' : '';
+    $selected = $option['value'] === $selectedTable ? ' selected' : '';
     $content .= '<option value="' . rex_escape($option['value']) . '"' . $selected . '>' . rex_escape($option['label']) . '</option>';
 }
 
 $content .= '</select>';
-$content .= '<p class="help-block">Nach dem Ändern der Tabelle speichern, damit die Feldlisten darunter automatisch aktualisiert werden.</p>';
+$content .= '<p class="help-block">Beim Ändern der Tabelle wird die Seite automatisch neu geladen und die Feldlisten werden aktualisiert.</p>';
 $content .= '</div>';
 $content .= '<div class="row">';
 $content .= '<div class="col-md-4">';
@@ -217,8 +217,7 @@ $content .= '</div>';
 $content .= '</div>';
 $content .= '</div>';
 $content .= $csrfToken->getHiddenField();
-$content .= '<input type="hidden" name="save_yform_sync" value="1">';
-$content .= '<button class="btn btn-primary" type="submit">' . rex_escape($addon->i18n('mailjet_connect_save')) . '</button>';
+$content .= '<button class="btn btn-primary" type="submit" name="save_yform_sync" value="1">' . rex_escape($addon->i18n('mailjet_connect_save')) . '</button>';
 $content .= '</form>';
 
 $fragment = new rex_fragment();
