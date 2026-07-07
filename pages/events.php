@@ -7,6 +7,7 @@ declare(strict_types=1);
 $store = new FriendsOfREDAXO\MailjetConnect\EventStore();
 $clearEventsToken = rex_csrf_token::factory('mailjet_connect_clear_events');
 $processSyncsToken = rex_csrf_token::factory('mailjet_connect_process_syncs');
+$manualSpamToken = rex_csrf_token::factory('mailjet_connect_manual_spam_sync');
 
 if (rex_post('process_syncs', 'bool', false)) {
     if ($processSyncsToken->isValid()) {
@@ -21,6 +22,28 @@ if (rex_post('clear_events', 'bool', false)) {
     if ($clearEventsToken->isValid()) {
         rex_sql::factory()->setQuery('DELETE FROM ' . rex::getTable('mailjet_connect_event'));
         echo rex_view::success($this->i18n('mailjet_connect_events_cleared'));
+    } else {
+        echo rex_view::warning($this->i18n('mailjet_connect_csrf_failed'));
+    }
+}
+
+if (rex_post('manual_spam_sync', 'bool', false)) {
+    if ($manualSpamToken->isValid()) {
+        $eventId = rex_post('event_id', 'int', 0);
+        if ($eventId > 0) {
+            $result = (new FriendsOfREDAXO\MailjetConnect\YFormSync())->processStoredEventById($eventId, true);
+            if (FriendsOfREDAXO\MailjetConnect\YFormSync::STATUS_SYNCED === $result['status']) {
+                echo rex_view::success($this->i18n('mailjet_connect_manual_spam_sync_success'));
+            } else {
+                $message = $this->i18n('mailjet_connect_manual_spam_sync_failed');
+                if ('' !== trim((string) ($result['message'] ?? ''))) {
+                    $message .= '<br><small>' . rex_escape((string) $result['message']) . '</small>';
+                }
+                echo rex_view::warning($message);
+            }
+        } else {
+            echo rex_view::warning($this->i18n('mailjet_connect_manual_spam_sync_missing_id'));
+        }
     } else {
         echo rex_view::warning($this->i18n('mailjet_connect_csrf_failed'));
     }
@@ -95,7 +118,10 @@ if ([] !== $where) {
     $query .= ' WHERE ' . implode(' AND ', $where);
 }
 
-$eventTypes = array_keys($store->countByType());
+$eventTypes = array_values(array_filter(
+    array_keys($store->countByType()),
+    static fn (string $value): bool => '' !== trim($value)
+));
 
 $content = '';
 $summary = $store->countByType();
@@ -351,6 +377,8 @@ try {
         $attempts = (int) $list->getValue('sync_attempts');
         $processedAt = trim((string) $list->getValue('sync_processed_at'));
         $syncEnabled = (bool) rex_addon::get('mailjet_connect')->getConfig('yform_sync_enabled', false);
+        $spamAction = (string) rex_addon::get('mailjet_connect')->getConfig('yform_sync_spam_action', 'sync');
+        $manualActionToken = rex_csrf_token::factory('mailjet_connect_manual_spam_sync');
 
         // Legacy ignored rows can still carry old reason texts; when sync is disabled,
         // show the current effective reason consistently in the list.
@@ -387,6 +415,45 @@ try {
             if (false !== $timestamp) {
                 $parts[] = '<small class="text-muted">' . rex_escape(rex_addon::get('mailjet_connect')->i18n('mailjet_connect_sync_processed_at')) . ': ' . rex_formatter::intlDateTime($timestamp, [\IntlDateFormatter::SHORT, \IntlDateFormatter::SHORT]) . '</small>';
             }
+        }
+
+        $isManualSpamCandidate = $syncEnabled
+            && 'spam' === strtolower($eventType)
+            && FriendsOfREDAXO\MailjetConnect\YFormSync::STATUS_IGNORED === $status
+            && 'log_only' === $spamAction;
+
+        if ($isManualSpamCandidate) {
+            $actionHtml = '<form method="post" style="margin-top:6px">';
+            $actionHtml .= $manualActionToken->getHiddenField();
+            $actionHtml .= '<input type="hidden" name="manual_spam_sync" value="1">';
+            $actionHtml .= '<input type="hidden" name="event_id" value="' . (int) $list->getValue('id') . '">';
+            $actionHtml .= '<button type="submit" class="btn btn-xs btn-warning">' . rex_escape(rex_addon::get('mailjet_connect')->i18n('mailjet_connect_manual_spam_sync')) . '</button>';
+
+            $persistParams = [
+                'filter_event_type',
+                'filter_blocked',
+                'filter_hard_bounce',
+                'filter_sync_status',
+                'filter_search',
+                'show_error_column',
+                'show_payload_column',
+                'list',
+                'sort',
+                'sorttype',
+                'start',
+            ];
+
+            foreach ($persistParams as $paramName) {
+                $paramValue = rex_request($paramName, 'string', '');
+                if ('' === $paramValue) {
+                    continue;
+                }
+
+                $actionHtml .= '<input type="hidden" name="' . rex_escape($paramName) . '" value="' . rex_escape($paramValue) . '">';
+            }
+
+            $actionHtml .= '</form>';
+            $parts[] = $actionHtml;
         }
 
         return implode('<br>', $parts);

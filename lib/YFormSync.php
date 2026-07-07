@@ -58,6 +58,30 @@ final class YFormSync
     }
 
     /**
+     * @return array{status:string,message:string,increment_attempts:bool,touch_processed_at:bool,dry_run:bool,dry_run_detail:string}
+     */
+    public function processStoredEventById(int $eventId, bool $manualSpamOverride = false): array
+    {
+        $store = new EventStore();
+        $row = $store->fetchById($eventId);
+
+        if (!is_array($row)) {
+            return $this->result(self::STATUS_FAILED, 'Ereignis nicht gefunden.', false, false);
+        }
+
+        $result = $this->processEvent($row, true, false, $manualSpamOverride);
+        $store->updateSyncState(
+            $eventId,
+            $result['status'],
+            $result['message'],
+            $result['increment_attempts'],
+            $result['touch_processed_at']
+        );
+
+        return $result;
+    }
+
+    /**
      * @param array<string, mixed> $event
      * @return array{status:string,message:string,increment_attempts:bool,touch_processed_at:bool,dry_run:bool,dry_run_detail:string}
      */
@@ -70,7 +94,7 @@ final class YFormSync
      * @param array<string, mixed> $event
      * @return array{status:string,message:string,increment_attempts:bool,touch_processed_at:bool}
      */
-    private function processEvent(array $event, bool $forceExecution, bool $dryRun = false): array
+    private function processEvent(array $event, bool $forceExecution, bool $dryRun = false, bool $manualSpamOverride = false): array
     {
         $addon = rex_addon::get('mailjet_connect');
         if (!(bool) $addon->getConfig('yform_sync_enabled', false)) {
@@ -106,7 +130,7 @@ final class YFormSync
 
         // Spam: if spam_action = log_only, only record the event for later analysis.
         $spamAction = (string) $addon->getConfig('yform_sync_spam_action', 'sync');
-        if ('spam' === $eventType && 'log_only' === $spamAction) {
+        if ('spam' === $eventType && 'log_only' === $spamAction && !$manualSpamOverride) {
             return $this->result(self::STATUS_IGNORED, \rex_i18n::msg('mailjet_connect_sync_status_spam_log_only'));
         }
 
