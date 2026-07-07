@@ -5,6 +5,15 @@ declare(strict_types=1);
 /** @var rex_addon $this */
 
 $addon = rex_addon::get('mailjet_connect');
+
+$user = rex::getUser();
+$canAccessSettings = null !== $user && ($user->isAdmin() || $user->hasPerm('mailjet_connect[settings]'));
+if (!$canAccessSettings) {
+    echo rex_view::error(rex_i18n::msg('error_no_permission'));
+
+    return;
+}
+
 $smtpToken = rex_csrf_token::factory('mailjet_connect_show_smtp');
 $applySmtpToken = rex_csrf_token::factory('mailjet_connect_apply_smtp_phpmailer');
 

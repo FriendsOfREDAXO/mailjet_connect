@@ -12,15 +12,19 @@ page:
             title: 'translate:mailjet_connect_settings'
             icon: rex-icon fa-cog
             isDefault: true
+            perm: mailjet_connect[settings]
         yform_sync:
             title: 'translate:mailjet_connect_yform_sync'
             icon: rex-icon fa-exchange
+            perm: mailjet_connect[yform_sync]
         events:
             title: 'translate:mailjet_connect_events'
             icon: rex-icon fa-list
+            perm: mailjet_connect[events]
         diagnostics:
             title: 'translate:mailjet_connect_diagnostics'
             icon: rex-icon fa-stethoscope
+            perm: mailjet_connect[diagnostics]
         help:
             title: 'translate:mailjet_connect_help'
             icon: rex-icon fa-question-circle
