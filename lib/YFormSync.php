@@ -115,6 +115,8 @@ final class YFormSync
         $action = (string) $addon->getConfig('yform_sync_action', 'deactivate');
         $statusField = trim((string) $addon->getConfig('yform_sync_status_field', 'status'));
         $inactiveValue = (string) $addon->getConfig('yform_sync_inactive_value', '0');
+        $reasonField = trim((string) $addon->getConfig('yform_sync_reason_field', ''));
+        $reasonTemplate = trim((string) $addon->getConfig('yform_sync_reason_template', 'Mailjet: {event_type}'));
         $syncMode = (string) $addon->getConfig('yform_sync_mode', 'immediate');
 
         if ('' === $configuredTable || '' === $emailField) {
@@ -157,9 +159,17 @@ final class YFormSync
             }
 
             $detail = sprintf('%d Datensatz/Datensätze mit %s = "%s" würde(n) Feld "%s" auf "%s" gesetzt bekommen.', $foundCount, $emailField, $email, $statusField, $inactiveValue);
+            $reasonValue = $this->buildReasonValue($reasonTemplate, $eventType, $email, $event);
+            if ('' !== $reasonField) {
+                $detail .= sprintf(' Zusätzlich würde Feld "%s" auf "%s" gesetzt.', $reasonField, $reasonValue);
+            }
+
             if (!$dryRun) {
                 foreach ($datasets as $dataset) {
                     $dataset->setValue($statusField, $inactiveValue);
+                    if ('' !== $reasonField) {
+                        $dataset->setValue($reasonField, $reasonValue);
+                    }
                     $dataset->save();
                 }
             }
@@ -322,5 +332,21 @@ final class YFormSync
         }
 
         return \rex_i18n::msg('mailjet_connect_sync_status_missing_email');
+    }
+
+    /**
+     * @param array<string, mixed> $event
+     */
+    private function buildReasonValue(string $template, string $eventType, string $email, array $event): string
+    {
+        $template = '' !== $template ? $template : 'Mailjet: {event_type}';
+        $message = trim((string) ($event['error_message'] ?? ''));
+
+        return strtr($template, [
+            '{event_type}' => $eventType,
+            '{email}' => $email,
+            '{error_message}' => $message,
+            '{date}' => date('Y-m-d H:i:s'),
+        ]);
     }
 }

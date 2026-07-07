@@ -5,40 +5,47 @@ declare(strict_types=1);
 /** @var rex_addon $this */
 
 $addon = rex_addon::get('mailjet_connect');
+$csrfToken = rex_csrf_token::factory('mailjet_connect_yform_sync');
 
 if (rex_post('save_yform_sync', 'bool', false)) {
-    $addon->setConfig('yform_sync_enabled', rex_post('yform_sync_enabled', 'bool', false));
-    $addon->setConfig('yform_sync_table', trim((string) rex_post('yform_sync_table', 'string', '')));
-    $addon->setConfig('yform_sync_email_field', trim((string) rex_post('yform_sync_email_field', 'string', 'email')));
+    if (!$csrfToken->isValid()) {
+        echo rex_view::warning($addon->i18n('mailjet_connect_csrf_failed'));
+    } else {
+        $addon->setConfig('yform_sync_enabled', rex_post('yform_sync_enabled', 'bool', false));
+        $addon->setConfig('yform_sync_table', trim((string) rex_post('yform_sync_table', 'string', '')));
+        $addon->setConfig('yform_sync_email_field', trim((string) rex_post('yform_sync_email_field', 'string', 'email')));
 
-    $yformSyncAction = rex_post('yform_sync_action', 'string', 'deactivate');
-    if (!in_array($yformSyncAction, ['deactivate', 'delete'], true)) {
-        $yformSyncAction = 'deactivate';
+        $yformSyncAction = rex_post('yform_sync_action', 'string', 'deactivate');
+        if (!in_array($yformSyncAction, ['deactivate', 'delete'], true)) {
+            $yformSyncAction = 'deactivate';
+        }
+        $addon->setConfig('yform_sync_action', $yformSyncAction);
+
+        $addon->setConfig('yform_sync_status_field', trim((string) rex_post('yform_sync_status_field', 'string', 'status')));
+        $addon->setConfig('yform_sync_reason_field', trim((string) rex_post('yform_sync_reason_field', 'string', '')));
+        $addon->setConfig('yform_sync_reason_template', trim((string) rex_post('yform_sync_reason_template', 'string', 'Mailjet: {event_type}')));
+        $addon->setConfig('yform_sync_inactive_value', trim((string) rex_post('yform_sync_inactive_value', 'string', '0')));
+
+        $syncMode = rex_post('yform_sync_mode', 'string', 'immediate');
+        if (!in_array($syncMode, ['immediate', 'cron'], true)) {
+            $syncMode = 'immediate';
+        }
+        $addon->setConfig('yform_sync_mode', $syncMode);
+
+        $syncEventTypes = array_filter(array_map('trim', preg_split('/[\s,]+/', (string) rex_post('yform_sync_event_types', 'string', 'blocked,spam,bounce'), -1, PREG_SPLIT_NO_EMPTY) ?: []));
+
+        $spamAction = rex_post('yform_sync_spam_action', 'string', 'sync');
+        if (!in_array($spamAction, ['sync', 'log_only'], true)) {
+            $spamAction = 'sync';
+        }
+        $addon->setConfig('yform_sync_spam_action', $spamAction);
+        if ([] === $syncEventTypes) {
+            $syncEventTypes = ['blocked', 'spam', 'bounce'];
+        }
+        $addon->setConfig('yform_sync_event_types', array_values($syncEventTypes));
+
+        echo rex_view::success($addon->i18n('mailjet_connect_settings_saved'));
     }
-    $addon->setConfig('yform_sync_action', $yformSyncAction);
-
-    $addon->setConfig('yform_sync_status_field', trim((string) rex_post('yform_sync_status_field', 'string', 'status')));
-    $addon->setConfig('yform_sync_inactive_value', trim((string) rex_post('yform_sync_inactive_value', 'string', '0')));
-
-    $syncMode = rex_post('yform_sync_mode', 'string', 'immediate');
-    if (!in_array($syncMode, ['immediate', 'cron'], true)) {
-        $syncMode = 'immediate';
-    }
-    $addon->setConfig('yform_sync_mode', $syncMode);
-
-    $syncEventTypes = array_filter(array_map('trim', preg_split('/[\s,]+/', (string) rex_post('yform_sync_event_types', 'string', 'blocked,spam,bounce'), -1, PREG_SPLIT_NO_EMPTY) ?: []));
-
-    $spamAction = rex_post('yform_sync_spam_action', 'string', 'sync');
-    if (!in_array($spamAction, ['sync', 'log_only'], true)) {
-        $spamAction = 'sync';
-    }
-    $addon->setConfig('yform_sync_spam_action', $spamAction);
-    if ([] === $syncEventTypes) {
-        $syncEventTypes = ['blocked', 'spam', 'bounce'];
-    }
-    $addon->setConfig('yform_sync_event_types', array_values($syncEventTypes));
-
-    echo rex_view::success($addon->i18n('mailjet_connect_settings_saved'));
 }
 
 $yformTableOptions = [];
@@ -53,6 +60,57 @@ if (rex_addon::get('yform')->isAvailable() && class_exists('rex_yform_manager_ta
 } else {
     echo rex_view::warning($addon->i18n('mailjet_connect_yform_sync_yform_missing'));
 }
+
+$selectedTable = trim((string) $addon->getConfig('yform_sync_table', ''));
+$yformColumns = [];
+if ('' !== $selectedTable && rex_addon::get('yform')->isAvailable() && class_exists('rex_yform_manager_table')) {
+    $table = rex_yform_manager_table::get($selectedTable);
+    if (null === $table && !str_starts_with($selectedTable, rex::getTablePrefix())) {
+        $table = rex_yform_manager_table::get(rex::getTable($selectedTable));
+    }
+
+    if (null !== $table) {
+        foreach ($table->getFields() as $field) {
+            $fieldName = trim((string) $field->getName());
+            if ('' !== $fieldName) {
+                $yformColumns[] = $fieldName;
+            }
+        }
+    }
+}
+
+$yformColumns = array_values(array_unique($yformColumns));
+sort($yformColumns);
+
+$selectColumnField = static function (string $name, string $currentValue, array $columns, bool $allowEmpty = true): string {
+    $html = '<select class="form-control" name="' . rex_escape($name) . '">';
+
+    if ($allowEmpty) {
+        $html .= '<option value="">— Feld wählen —</option>';
+    }
+
+    if ([] === $columns) {
+        if ('' !== $currentValue) {
+            $html .= '<option value="' . rex_escape($currentValue) . '" selected>' . rex_escape($currentValue) . '</option>';
+        }
+        $html .= '</select>';
+
+        return $html;
+    }
+
+    if ('' !== $currentValue && !in_array($currentValue, $columns, true)) {
+        $html .= '<option value="' . rex_escape($currentValue) . '" selected>' . rex_escape($currentValue) . ' (nicht gefunden)</option>';
+    }
+
+    foreach ($columns as $column) {
+        $selected = $column === $currentValue ? ' selected' : '';
+        $html .= '<option value="' . rex_escape($column) . '"' . $selected . '>' . rex_escape($column) . '</option>';
+    }
+
+    $html .= '</select>';
+
+    return $html;
+};
 
 $infoContent = '<p>' . rex_escape($addon->i18n('mailjet_connect_yform_sync_notice')) . '</p>';
 $infoContent .= '<div class="alert alert-info">'
@@ -74,20 +132,23 @@ $content .= '<label><input type="checkbox" name="yform_sync_enabled" value="1"' 
 $content .= '</div>';
 $content .= '<div class="form-group">';
 $content .= '<label for="yform_sync_table">' . rex_escape($addon->i18n('mailjet_connect_yform_sync_table')) . '</label>';
-$content .= '<input class="form-control" list="mailjet-connect-yform-tables" type="text" id="yform_sync_table" name="yform_sync_table" value="' . rex_escape((string) $addon->getConfig('yform_sync_table', '')) . '" placeholder="rex_meine_tabelle">';
-$content .= '<datalist id="mailjet-connect-yform-tables">';
+
+$content .= '<select class="form-control" id="yform_sync_table" name="yform_sync_table">';
+$content .= '<option value="">— Tabelle wählen —</option>';
 
 foreach ($yformTableOptions as $option) {
-    $content .= '<option value="' . rex_escape($option['value']) . '">' . rex_escape($option['label']) . '</option>';
+    $selected = $option['value'] === (string) $addon->getConfig('yform_sync_table', '') ? ' selected' : '';
+    $content .= '<option value="' . rex_escape($option['value']) . '"' . $selected . '>' . rex_escape($option['label']) . '</option>';
 }
 
-$content .= '</datalist>';
+$content .= '</select>';
+$content .= '<p class="help-block">Nach dem Ändern der Tabelle speichern, damit die Feldlisten darunter automatisch aktualisiert werden.</p>';
 $content .= '</div>';
 $content .= '<div class="row">';
 $content .= '<div class="col-md-4">';
 $content .= '<div class="form-group">';
 $content .= '<label for="yform_sync_email_field">' . rex_escape($addon->i18n('mailjet_connect_yform_sync_email_field')) . '</label>';
-$content .= '<input class="form-control" type="text" id="yform_sync_email_field" name="yform_sync_email_field" value="' . rex_escape((string) $addon->getConfig('yform_sync_email_field', 'email')) . '">';
+$content .= $selectColumnField('yform_sync_email_field', (string) $addon->getConfig('yform_sync_email_field', 'email'), $yformColumns, false);
 $content .= '</div>';
 $content .= '</div>';
 $content .= '<div class="col-md-4">';
@@ -129,7 +190,7 @@ $content .= '<div class="row">';
 $content .= '<div class="col-md-6">';
 $content .= '<div class="form-group">';
 $content .= '<label for="yform_sync_status_field">' . rex_escape($addon->i18n('mailjet_connect_yform_sync_status_field')) . '</label>';
-$content .= '<input class="form-control" type="text" id="yform_sync_status_field" name="yform_sync_status_field" value="' . rex_escape((string) $addon->getConfig('yform_sync_status_field', 'status')) . '">';
+$content .= $selectColumnField('yform_sync_status_field', (string) $addon->getConfig('yform_sync_status_field', 'status'), $yformColumns, false);
 $content .= '</div>';
 $content .= '</div>';
 $content .= '<div class="col-md-6">';
@@ -139,6 +200,23 @@ $content .= '<input class="form-control" type="text" id="yform_sync_inactive_val
 $content .= '</div>';
 $content .= '</div>';
 $content .= '</div>';
+$content .= '<div class="row">';
+$content .= '<div class="col-md-6">';
+$content .= '<div class="form-group">';
+$content .= '<label for="yform_sync_reason_field">' . rex_escape($addon->i18n('mailjet_connect_yform_sync_reason_field')) . '</label>';
+$content .= $selectColumnField('yform_sync_reason_field', (string) $addon->getConfig('yform_sync_reason_field', ''), $yformColumns, true);
+$content .= '<p class="help-block">' . rex_escape($addon->i18n('mailjet_connect_yform_sync_reason_field_notice')) . '</p>';
+$content .= '</div>';
+$content .= '</div>';
+$content .= '<div class="col-md-6">';
+$content .= '<div class="form-group">';
+$content .= '<label for="yform_sync_reason_template">' . rex_escape($addon->i18n('mailjet_connect_yform_sync_reason_template')) . '</label>';
+$content .= '<input class="form-control" type="text" id="yform_sync_reason_template" name="yform_sync_reason_template" value="' . rex_escape((string) $addon->getConfig('yform_sync_reason_template', 'Mailjet: {event_type}')) . '">';
+$content .= '<p class="help-block">' . rex_escape($addon->i18n('mailjet_connect_yform_sync_reason_template_notice')) . '</p>';
+$content .= '</div>';
+$content .= '</div>';
+$content .= '</div>';
+$content .= $csrfToken->getHiddenField();
 $content .= '<input type="hidden" name="save_yform_sync" value="1">';
 $content .= '<button class="btn btn-primary" type="submit">' . rex_escape($addon->i18n('mailjet_connect_save')) . '</button>';
 $content .= '</form>';

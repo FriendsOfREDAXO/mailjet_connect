@@ -64,6 +64,14 @@ if (!$addon->hasConfig('yform_sync_status_field')) {
     $addon->setConfig('yform_sync_status_field', 'status');
 }
 
+if (!$addon->hasConfig('yform_sync_reason_field')) {
+    $addon->setConfig('yform_sync_reason_field', '');
+}
+
+if (!$addon->hasConfig('yform_sync_reason_template')) {
+    $addon->setConfig('yform_sync_reason_template', 'Mailjet: {event_type}');
+}
+
 if (!$addon->hasConfig('yform_sync_inactive_value')) {
     $addon->setConfig('yform_sync_inactive_value', '0');
 }

@@ -102,6 +102,10 @@ mailjet_connect_yform_sync_mode_immediate = Sofort beim Webhook ausführen
 mailjet_connect_yform_sync_mode_cron = Nur vormerken und per Cronjob verarbeiten
 mailjet_connect_yform_sync_event_types = Ereignistypen für die Synchronisation
 mailjet_connect_yform_sync_status_field = Status-Feld für Deaktivierung
+mailjet_connect_yform_sync_reason_field = Optionales Begründungsfeld
+mailjet_connect_yform_sync_reason_field_notice = Optional: Feldname für eine Status-Info/Begründung (z. B. reason, sync_reason, status_info). Nur bei Deaktivieren relevant.
+mailjet_connect_yform_sync_reason_template = Begründungs-Template
+mailjet_connect_yform_sync_reason_template_notice = Verfügbare Platzhalter: {event_type}, {email}, {error_message}, {date}
 mailjet_connect_yform_sync_inactive_value = Wert für deaktivierte Datensätze
 mailjet_connect_yform_sync_criteria_notice = Empfohlen: blocked,spam,bounce. Bei bounce wird nur synchronisiert, wenn hard_bounce=true ist (Soft-Bounces werden ignoriert).
 mailjet_connect_yform_sync_mode_notice = Im Sofort-Modus wird direkt beim Webhook synchronisiert. Im Cron-Modus werden passende Events erst als vorgemerkt markiert und später per manuellem Lauf oder Cronjob verarbeitet.

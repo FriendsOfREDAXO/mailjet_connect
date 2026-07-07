@@ -17,6 +17,17 @@ final class rex_api_mailjet_connect_webhook extends rex_api_function
     {
         rex_response::cleanOutputBuffers();
 
+        $addon = rex_addon::get('mailjet_connect');
+        if (!(bool) $addon->getConfig('enabled', true)) {
+            $this->sendJsonWithStatus(200, [
+                'success' => true,
+                'stored' => 0,
+                'skipped' => 0,
+                'status' => 'addon_disabled',
+            ]);
+            exit;
+        }
+
         $method = rex_request_method();
 
         // Mail providers sometimes validate webhook URLs with GET/HEAD before sending POST events.
@@ -49,6 +60,23 @@ final class rex_api_mailjet_connect_webhook extends rex_api_function
             }
 
             $events = $this->normalizePayload($decoded);
+            $allowedEventTypes = $this->getAllowedEventTypes();
+            $skipped = 0;
+
+            if ([] !== $allowedEventTypes) {
+                $filteredEvents = [];
+                foreach ($events as $event) {
+                    $eventType = strtolower(trim((string) ($event['event_type'] ?? '')));
+                    if ('' !== $eventType && in_array($eventType, $allowedEventTypes, true)) {
+                        $filteredEvents[] = $event;
+                        continue;
+                    }
+
+                    ++$skipped;
+                }
+                $events = $filteredEvents;
+            }
+
             $store = new EventStore();
             $yformSync = class_exists(FriendsOfREDAXO\MailjetConnect\YFormSync::class)
                 ? new FriendsOfREDAXO\MailjetConnect\YFormSync()
@@ -64,6 +92,7 @@ final class rex_api_mailjet_connect_webhook extends rex_api_function
             $this->sendJsonWithStatus(200, [
                 'success' => true,
                 'stored' => count($events),
+                'skipped' => $skipped,
             ]);
             exit;
         } catch (\Throwable $exception) {
@@ -413,5 +442,28 @@ final class rex_api_mailjet_connect_webhook extends rex_api_function
         }
 
         return false;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function getAllowedEventTypes(): array
+    {
+        $configured = rex_addon::get('mailjet_connect')->getConfig('webhook_events', ['bounce', 'blocked', 'spam', 'sent']);
+        $values = is_array($configured) ? $configured : preg_split('/[\s,]+/', (string) $configured, -1, PREG_SPLIT_NO_EMPTY);
+
+        if (!is_array($values)) {
+            return [];
+        }
+
+        $allowed = [];
+        foreach ($values as $value) {
+            $eventType = strtolower(trim((string) $value));
+            if ('' !== $eventType) {
+                $allowed[] = $eventType;
+            }
+        }
+
+        return array_values(array_unique($allowed));
     }
 }

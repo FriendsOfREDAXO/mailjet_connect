@@ -149,6 +149,25 @@ final class EventStore
         $sql->update();
     }
 
+    public function clearOldPayloads(int $keepDays): int
+    {
+        $keepDays = max(1, $keepDays);
+        $threshold = time() - ($keepDays * 86400);
+
+        $sql = rex_sql::factory();
+        $sql->setQuery(
+            'UPDATE ' . rex::getTable('mailjet_connect_event')
+            . ' SET payload_json = NULL'
+            . ' WHERE payload_json IS NOT NULL'
+            . ' AND payload_json != ""'
+            . ' AND event_time > 0'
+            . ' AND event_time < ?',
+            [$threshold]
+        );
+
+        return $sql->getRows();
+    }
+
     private function findIdByHash(string $eventHash): int
     {
         $sql = rex_sql::factory();
