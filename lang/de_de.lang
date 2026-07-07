@@ -18,6 +18,15 @@ mailjet_connect_webhook_token_notice = Alternative zu Basic Auth. Wenn gesetzt, 
 mailjet_connect_webhook_events = Ereignistypen
 mailjet_connect_webhook_notice = Empfohlen sind bounce, blocked, spam und sent. Mailjet kann den Webhook per HTTPS und Basic Auth aufrufen.
 mailjet_connect_webhook_url = Webhook URL
+mailjet_connect_smtp_title = SMTP-Setup für PHPMailer
+mailjet_connect_smtp_hint = Optional: SMTP-Daten per Klick anzeigen, um sie in PHPMailer zu übernehmen.
+mailjet_connect_smtp_show_button = SMTP-Daten anzeigen
+mailjet_connect_smtp_apply_button = In PHPMailer übernehmen
+mailjet_connect_smtp_apply_confirm = Soll die PHPMailer-Konfiguration auf Mailjet-SMTP umgestellt werden?
+mailjet_connect_smtp_apply_success = SMTP-Einstellungen wurden in PHPMailer übernommen.
+mailjet_connect_smtp_apply_phpmailer_missing = Das AddOn PHPMailer ist nicht verfügbar.
+mailjet_connect_smtp_apply_credentials_missing = API Key und API Secret müssen gesetzt sein, bevor die SMTP-Daten übernommen werden können.
+mailjet_connect_smtp_credentials_notice = Für Mailjet SMTP gilt: Benutzername = API Key, Passwort = API Secret.
 mailjet_connect_runtime = Laufzeit
 mailjet_connect_retention_days = Rohdaten-Aufbewahrung in Tagen
 mailjet_connect_settings_saved = Einstellungen gespeichert.

@@ -5,6 +5,8 @@ declare(strict_types=1);
 /** @var rex_addon $this */
 
 $addon = rex_addon::get('mailjet_connect');
+$smtpToken = rex_csrf_token::factory('mailjet_connect_show_smtp');
+$applySmtpToken = rex_csrf_token::factory('mailjet_connect_apply_smtp_phpmailer');
 
 $webhookPath = rex_url::frontendController(['rex-api-call' => 'mailjet_connect_webhook'], false);
 $webhookUrl = rtrim(rex::getServer(), '/') . '/' . ltrim($webhookPath, './');
@@ -82,8 +84,76 @@ if (rex_post('config-submit', 'bool', false)) {
 
 $content = $form->get();
 
+$smtpHost = 'in-v3.mailjet.com';
+$smtpPort = 587;
+$smtpSecurity = 'tls';
+$smtpUser = trim((string) $addon->getConfig('api_key', ''));
+$smtpPass = trim((string) $addon->getConfig('api_secret', ''));
+$showSmtpSettings = rex_post('show_smtp_settings', 'bool', false) && $smtpToken->isValid();
+
+if (rex_post('apply_smtp_to_phpmailer', 'bool', false)) {
+    if (!$applySmtpToken->isValid()) {
+        echo rex_view::warning($addon->i18n('mailjet_connect_csrf_failed'));
+    } else {
+        $phpMailerAddon = rex_addon::get('phpmailer');
+        if (!$phpMailerAddon->isAvailable()) {
+            echo rex_view::warning($addon->i18n('mailjet_connect_smtp_apply_phpmailer_missing'));
+        } elseif ('' === $smtpUser || '' === $smtpPass) {
+            echo rex_view::warning($addon->i18n('mailjet_connect_smtp_apply_credentials_missing'));
+        } else {
+            $phpMailerConfig = (array) $phpMailerAddon->getConfig();
+            $phpMailerConfig['mailer'] = 'smtp';
+            $phpMailerConfig['host'] = $smtpHost;
+            $phpMailerConfig['port'] = $smtpPort;
+            $phpMailerConfig['smtpsecure'] = $smtpSecurity;
+            $phpMailerConfig['security_mode'] = false;
+            $phpMailerConfig['smtpauth'] = true;
+            $phpMailerConfig['username'] = $smtpUser;
+            $phpMailerConfig['password'] = $smtpPass;
+            $phpMailerAddon->setConfig($phpMailerConfig);
+
+            echo rex_view::success($addon->i18n('mailjet_connect_smtp_apply_success'));
+        }
+    }
+}
+
+if (rex_post('show_smtp_settings', 'bool', false) && !$smtpToken->isValid()) {
+    echo rex_view::warning($addon->i18n('mailjet_connect_csrf_failed'));
+}
+
+$smtpContent = '<p class="help-block">' . rex_escape($addon->i18n('mailjet_connect_smtp_hint')) . '</p>';
+$smtpContent .= '<form method="post" style="margin-bottom:10px">';
+$smtpContent .= $smtpToken->getHiddenField();
+$smtpContent .= '<input type="hidden" name="show_smtp_settings" value="1">';
+$smtpContent .= '<button type="submit" class="btn btn-default">' . rex_escape($addon->i18n('mailjet_connect_smtp_show_button')) . '</button>';
+$smtpContent .= '</form>';
+
+$smtpContent .= '<form method="post" style="margin-bottom:10px">';
+$smtpContent .= $applySmtpToken->getHiddenField();
+$smtpContent .= '<input type="hidden" name="apply_smtp_to_phpmailer" value="1">';
+$smtpContent .= '<button type="submit" class="btn btn-primary" data-confirm="' . rex_escape($addon->i18n('mailjet_connect_smtp_apply_confirm')) . '">' . rex_escape($addon->i18n('mailjet_connect_smtp_apply_button')) . '</button>';
+$smtpContent .= '</form>';
+
+if ($showSmtpSettings) {
+    $smtpConfigText = "Host: {$smtpHost}\n"
+        . "Port: {$smtpPort}\n"
+        . "SMTPSecure: {$smtpSecurity} (STARTTLS)\n"
+        . "SMTPAuth: true\n"
+        . "Username: {$smtpUser}\n"
+        . "Password: {$smtpPass}";
+
+    $smtpContent .= '<div class="alert alert-info">' . rex_escape($addon->i18n('mailjet_connect_smtp_credentials_notice')) . '</div>';
+    $smtpContent .= '<textarea class="form-control" rows="8" readonly>' . rex_escape($smtpConfigText) . '</textarea>';
+}
+
 $fragment = new rex_fragment();
 $fragment->setVar('class', 'edit', false);
 $fragment->setVar('title', $addon->i18n('mailjet_connect_settings'), false);
 $fragment->setVar('body', $content, false);
 echo $fragment->parse('core/page/section.php');
+
+$smtpFragment = new rex_fragment();
+$smtpFragment->setVar('class', 'edit', false);
+$smtpFragment->setVar('title', $addon->i18n('mailjet_connect_smtp_title'), false);
+$smtpFragment->setVar('body', $smtpContent, false);
+echo $smtpFragment->parse('core/page/section.php');
